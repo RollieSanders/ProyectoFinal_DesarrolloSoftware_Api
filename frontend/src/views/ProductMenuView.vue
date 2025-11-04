@@ -70,6 +70,10 @@ const products = ref([]);
 
 const fetchProducts = async () => {
   try {
+<<<<<<< HEAD
+=======
+    // const response = await axios.get('https://rollie-api-3f994ccce3f7.herokuapp.com/products');
+>>>>>>> 9fbf6d1e70e93149640061c58370cab6155d3314
     const response = await axios.get('http://127.0.0.1:8000/products');
     products.value = response.data;
   } catch (error) {
