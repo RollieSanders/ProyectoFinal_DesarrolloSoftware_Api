@@ -1,0 +1,104 @@
+# .github/workflows/deploy.yml
+name: CI/CD a AWS ECS con Fargate
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  AWS_REGION: us-east-1 # Asegúrate de que coincida con tu Terraform
+  # Estos nombres deben coincidir con tus recursos de Terraform
+  ECR_REPOSITORY_FRONTEND: proyectofinal-frontend
+  ECR_REPOSITORY_BACKEND: proyectofinal-backend
+  ECS_CLUSTER: proyectofinal-cluster
+  ECS_SERVICE: proyectofinal-service
+  ECS_TASK_DEFINITION: proyectofinal-task-definition 
+
+jobs:
+  deploy:
+    name: Build, Push y Despliegue
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout del Código
+        uses: actions/checkout@v4
+
+      # -------------------------------------------------------------------------
+      #  Paso 0: Configurar Credenciales AWS (Requiere Secrets configurados en GitHub)
+      # -------------------------------------------------------------------------
+      - name: Configurar Credenciales de AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }} # Configura esto en Settings -> Secrets
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }} # Configura esto en Settings -> Secrets
+          aws-region: ${{ env.AWS_REGION }}
+
+      # -------------------------------------------------------------------------
+      #  Paso 1: BUILD y PUSH del Backend (Python)
+      # -------------------------------------------------------------------------
+      - name: Login en Amazon ECR (Backend)
+        id: login-ecr-backend
+        uses: aws-actions/amazon-ecr-login@v2
+        
+      - name: Build, Tag y Push de la imagen Backend
+        id: build-image-backend
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr-backend.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }} 
+        run: |
+          # Nota: Asegúrate de que Dockerfile y contexto son correctos
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY_BACKEND:$IMAGE_TAG -f backend/Dockerfile backend/
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY_BACKEND:$IMAGE_TAG
+          echo "IMAGE_URI=$ECR_REGISTRY/$ECR_REPOSITORY_BACKEND:$IMAGE_TAG" >> $GITHUB_ENV
+
+      # -------------------------------------------------------------------------
+      #  Paso 2: BUILD y PUSH del Frontend (Vue.js)
+      # -------------------------------------------------------------------------
+      - name: Login en Amazon ECR (Frontend)
+        id: login-ecr-frontend
+        uses: aws-actions/amazon-ecr-login@v2
+      
+      - name: Build, Tag y Push de la imagen Frontend
+        id: build-image-frontend
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr-frontend.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY_FRONTEND:$IMAGE_TAG -f frontend/Dockerfile frontend/
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY_FRONTEND:$IMAGE_TAG
+          echo "FRONTEND_IMAGE_URI=$ECR_REGISTRY/$ECR_REPOSITORY_FRONTEND:$IMAGE_TAG" >> $GITHUB_ENV
+          
+      # -------------------------------------------------------------------------
+      #  Paso 3: Despliegue en ECS (Actualizar la Task Definition y el Servicio)
+      # -------------------------------------------------------------------------
+      - name: Descargar, Actualizar y Registrar la nueva Task Definition
+        id: update-task-def
+        run: |
+          # 1. Obtener la definición de tarea actual (asume que Terraform ya la ejecutó una vez)
+          TASK_DEF_JSON=$(aws ecs describe-task-definition \
+            --task-definition ${{ env.ECS_TASK_DEFINITION }} \
+            --query 'taskDefinition' --output json)
+            
+          # 2. Limpiar metadatos innecesarios para el registro
+          CLEAN_TASK_DEF=$(echo $TASK_DEF_JSON | jq 'del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .deregisteredAt, .registeredBy)')
+          
+          # 3. Actualizar URI de las imágenes en la definición de tarea
+          UPDATED_TASK_DEF=$(echo $CLEAN_TASK_DEF | \
+            jq --arg FRONTEND_URI "${{ env.FRONTEND_IMAGE_URI }}" '.containerDefinitions |= map(if .name == "frontend-container" then .image = $FRONTEND_URI else . end)' | \
+            jq --arg BACKEND_URI "${{ env.IMAGE_URI }}" '.containerDefinitions |= map(if .name == "backend-container" then .image = $BACKEND_URI else . end)')
+
+          # 4. Registrar la nueva Task Definition
+          NEW_TASK_ARN=$(aws ecs register-task-definition \
+            --cli-input-json "$UPDATED_TASK_DEF" \
+            --query 'taskDefinition.taskDefinitionArn' --output text)
+            
+          echo "new_task_arn=$NEW_TASK_ARN" >> $GITHUB_OUTPUT # Guardar el ARN para el siguiente paso
+
+      - name: Despliegue al Servicio ECS
+        uses: aws-actions/amazon-ecs-deploy-service@v1
+        with:
+          cluster: ${{ env.ECS_CLUSTER }}
+          service: ${{ env.ECS_SERVICE }}
+          task-definition: ${{ steps.update-task-def.outputs.new_task_arn }}
