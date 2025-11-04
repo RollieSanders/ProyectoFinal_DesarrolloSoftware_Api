@@ -1,4 +1,4 @@
-# .github/workflows/deploy.yml
+# .github/workflows/deploy.yml - Versión Corregida
 name: CI/CD a AWS ECS con Fargate
 
 on:
@@ -26,13 +26,19 @@ jobs:
         uses: actions/checkout@v4
 
       # -------------------------------------------------------------------------
-      #  Paso 0: Configurar Credenciales AWS (Requiere Secrets configurados en GitHub)
+      # ⚠️ CORRECCIÓN 1: Instalar la herramienta 'jq' antes de usarla
+      # -------------------------------------------------------------------------
+      - name: Instalar jq (para manipular JSON de Task Definition)
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      # -------------------------------------------------------------------------
+      #  Paso 0: Configurar Credenciales AWS
       # -------------------------------------------------------------------------
       - name: Configurar Credenciales de AWS
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }} # Configura esto en Settings -> Secrets
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }} # Configura esto en Settings -> Secrets
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
       # -------------------------------------------------------------------------
@@ -48,9 +54,10 @@ jobs:
           ECR_REGISTRY: ${{ steps.login-ecr-backend.outputs.registry }}
           IMAGE_TAG: ${{ github.sha }} 
         run: |
-          # Nota: Asegúrate de que Dockerfile y contexto son correctos
+          # El contexto de backend/ permite usar recursos como requirements.txt dentro de esa carpeta
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY_BACKEND:$IMAGE_TAG -f backend/Dockerfile backend/
           docker push $ECR_REGISTRY/$ECR_REPOSITORY_BACKEND:$IMAGE_TAG
+          # Se establece la URI de la imagen para el paso de actualización de la Task Definition
           echo "IMAGE_URI=$ECR_REGISTRY/$ECR_REPOSITORY_BACKEND:$IMAGE_TAG" >> $GITHUB_ENV
 
       # -------------------------------------------------------------------------
@@ -68,6 +75,7 @@ jobs:
         run: |
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY_FRONTEND:$IMAGE_TAG -f frontend/Dockerfile frontend/
           docker push $ECR_REGISTRY/$ECR_REPOSITORY_FRONTEND:$IMAGE_TAG
+          # Se establece la URI de la imagen para el paso de actualización de la Task Definition
           echo "FRONTEND_IMAGE_URI=$ECR_REGISTRY/$ECR_REPOSITORY_FRONTEND:$IMAGE_TAG" >> $GITHUB_ENV
           
       # -------------------------------------------------------------------------
@@ -76,7 +84,7 @@ jobs:
       - name: Descargar, Actualizar y Registrar la nueva Task Definition
         id: update-task-def
         run: |
-          # 1. Obtener la definición de tarea actual (asume que Terraform ya la ejecutó una vez)
+          # 1. Obtener la definición de tarea actual (la última activa)
           TASK_DEF_JSON=$(aws ecs describe-task-definition \
             --task-definition ${{ env.ECS_TASK_DEFINITION }} \
             --query 'taskDefinition' --output json)
@@ -97,7 +105,8 @@ jobs:
           echo "new_task_arn=$NEW_TASK_ARN" >> $GITHUB_OUTPUT # Guardar el ARN para el siguiente paso
 
       - name: Despliegue al Servicio ECS
-        uses: aws-actions/amazon-ecs-deploy-service@v1
+        # ❌ ERROR CORREGIDO: Usar la acción correcta 'amazon-ecs-deploy-task-definition'
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
         with:
           cluster: ${{ env.ECS_CLUSTER }}
           service: ${{ env.ECS_SERVICE }}
