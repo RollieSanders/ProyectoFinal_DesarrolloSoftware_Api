@@ -6,21 +6,23 @@ FROM node:20-alpine AS build
 
 WORKDIR /app
 
-# 1. Instalar herramientas de build necesarias para dependencias nativas
-# Esto evita fallos silenciosos en la instalación.
+# 1. Instalar herramientas de build del SO (Para dependencias nativas)
 RUN apk add --no-cache python3 make g++
 
 # 2. Copiar archivos de dependencia
 COPY package*.json ./
 
-# 3. Instalación Limpia y Consistente (usando npm ci)
-RUN npm ci
+# 3. Instalación Limpia y Consistente
+RUN npm install
 
-# 4. Copiar el resto del código fuente
-COPY . .
+# 4. Corregir permisos de ejecución (Solución al "Permission denied")
+# CAMBIO CLAVE: Asegura que todos los scripts en node_modules/.bin sean ejecutables.
+RUN chmod +x ./node_modules/.bin/*
 
-# 5. Ejecutar el build (ahora que el binario 'vite' existe)
-# npm run build funciona porque el binario debe estar ya en su lugar.
+# 5. Copiar el resto del código fuente
+COPY . . 
+
+# 6. Ejecutar el build
 RUN npm run build
 
 # Stage 2: Servir con Nginx (imagen ligera)
