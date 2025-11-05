@@ -1,0 +1,21 @@
+# Created by venv; see https://docs.python.org/3/library/venv.html
+# Archivos de entorno virtual
+.venv/
+venv/
+env/
+
+# Archivos de caché
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Archivos de logs y bases de datos
+*.log
+*.sqlite3
+
+# Archivos de IDEs (opcional, si usas VS Code)
+.vscode/
+
+# Ignorar archivos temporales comunes
+*.tmp
