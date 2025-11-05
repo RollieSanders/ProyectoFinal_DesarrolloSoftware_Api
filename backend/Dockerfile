@@ -22,16 +22,16 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # ----------------------------------------------------
 # Etapa 2: Runtime (Imagen limpia y pequeña para producción)
-# Se recomienda usar python:3.9-slim para la etapa final
 # ----------------------------------------------------
 FROM python:3.9-slim
 
 # Instalar librerías de sistema que SÍ son necesarias en runtime
-# Ej: libpq5 para la conexión a PostgreSQL, si fuera el caso.
-# Si estás usando pyodbc, necesitas librerías de ODBC runtime.
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libpq5 \
-    odbcinst1debian2 \
+# La corrección está en la gestión del 'apt-get update' y la eliminación de la caché.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        libpq5 \
+        odbcinst1debian2 \
+    && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
 # Configuración del entorno
@@ -40,8 +40,9 @@ ENV PYTHONUNBUFFERED 1
 
 WORKDIR /app
 
-# Copiar las librerías instaladas desde la etapa 'builder'
+# Copiar librerías de la Etapa Builder (PyTorch)
 COPY --from=builder /usr/local/lib/python3.9/site-packages /usr/local/lib/python3.9/site-packages
+
 # Copiar el código de la aplicación
 COPY . /app/
 
