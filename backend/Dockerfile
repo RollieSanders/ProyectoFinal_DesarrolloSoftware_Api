@@ -1,15 +1,15 @@
 # ----------------------------------------------------
-# Etapa 1: Build (Instalación de dependencias complejas)
-# Usamos una imagen base completa, o directamente la imagen de pytorch si es viable.
-# Para este ejemplo, volvemos a una base completa y añadimos herramientas de compilación.
+# Etapa 1: Build (Usando la imagen oficial de PyTorch)
 # ----------------------------------------------------
-FROM python:3.9 AS builder
+FROM pytorch/pytorch:2.4.0-cpu-py39 AS builder
 
 # 1. Instalar herramientas de compilación y dependencias de sistema
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    libpq-dev \
-    unixodbc-dev \
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        build-essential \
+        unixodbc-dev \
+        libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Directorio de trabajo
@@ -25,12 +25,15 @@ RUN pip install --no-cache-dir -r requirements.txt
 # ----------------------------------------------------
 FROM python:3.9-slim
 
-# Instalar librerías de sistema que SÍ son necesarias en runtime
-# La corrección está en la gestión del 'apt-get update' y la eliminación de la caché.
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
-        libpq5 \
-        odbcinst1debian2 \
+# 1. Asegurarse de que apt-get no sea interactivo y actualizar la lista de paquetes
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update
+
+# 2. Instalar librerías de sistema (libpq5 y odbcinst1debian2) y limpiar
+RUN apt-get install -y --no-install-recommends \
+    libpq5 \
+    odbcinst1debian2 \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
