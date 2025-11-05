@@ -17,7 +17,7 @@ COPY package*.json ./
 RUN npm ci
 
 # 4. Copiar el resto del código fuente
-COPY  .
+COPY . .
 
 # 5. Ejecutar el build (ahora que el binario 'vite' existe)
 # npm run build funciona porque el binario debe estar ya en su lugar.
