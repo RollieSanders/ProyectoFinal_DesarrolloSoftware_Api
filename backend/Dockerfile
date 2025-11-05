@@ -14,12 +14,12 @@ WORKDIR /app
 
 # Instalar las dependencias
 #COPY backend/requirements.txt /app/
-COPY requirements.txt /app/
-RUN pip install --no-cache-dir -r requirements.txt
+COPY backend/requirements.txt /app/
+RUN pip install --no-cache-dir -r /app/requirements.txt
 
 # Copiar el código de la aplicación
 #COPY backend/ /app/
-COPY . /app/
+COPY backend/ /app/
 
 # Exponer puerto (Asegúrate de que coincida con el puerto de tu app Python, ej. 5000)
 EXPOSE 5000
