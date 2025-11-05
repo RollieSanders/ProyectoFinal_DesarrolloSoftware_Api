@@ -22,12 +22,12 @@ WORKDIR /app
 
 # 3. INSTALACIÓN DE DEPENDENCIAS DE PYTHON
 # Copia el archivo de requisitos e instala las dependencias
-COPY backend/requirements-linux.txt .
+COPY requirements-linux.txt .
 RUN pip install --no-cache-dir -r requirements-linux.txt
 
 # 4. COPIAR EL CÓDIGO DE LA APLICACIÓN
 # Copia el resto del código desde el directorio 'backend'
-COPY backend/main.py .
+COPY main.py .
 
 # 5. CONFIGURACIÓN FINAL
 EXPOSE 8000
