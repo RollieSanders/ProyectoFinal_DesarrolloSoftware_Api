@@ -4,9 +4,11 @@
 # Stage 1: Build la aplicación Vue.js
 FROM node:20-alpine AS build
 
+# Forzamos root para asegurar permisos de escritura y ejecución
+USER root 
 WORKDIR /app
 
-# 1. Instalar herramientas de build del SO (Para dependencias nativas)
+# 1. Instalar herramientas de build del SO (necesario para npm)
 RUN apk add --no-cache python3 make g++
 
 # 2. Copiar archivos de dependencia
@@ -15,15 +17,14 @@ COPY package*.json ./
 # 3. Instalación Limpia y Consistente
 RUN npm install
 
-# 4. Corregir permisos de ejecución (Solución al "Permission denied")
-# CAMBIO CLAVE: Asegura que todos los scripts en node_modules/.bin sean ejecutables.
-RUN chmod +x ./node_modules/.bin/*
-
-# 5. Copiar el resto del código fuente
+# 4. Copiar el resto del código fuente
 COPY . . 
 
-# 6. Ejecutar el build
-RUN npm run build
+# 5. Ejecutar el build forzando la ruta completa al ejecutable de Node
+# Solución definitiva al "Permission denied" en Alpine: Ejecutar directamente
+# el script 'build' de package.json a través del comando 'sh'.
+# Esto evita que el shell falle al intentar resolver el binario 'vite'.
+RUN sh -c "npm run build"
 
 # Stage 2: Servir con Nginx (imagen ligera)
 FROM nginx:stable-alpine
