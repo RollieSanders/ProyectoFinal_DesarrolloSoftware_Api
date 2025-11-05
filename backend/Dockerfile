@@ -1,7 +1,7 @@
 # ----------------------------------------------------
 # Single-stage build para Backend (Python/Flask)
 # ----------------------------------------------------
-FROM python:3.9-slim
+FROM python:3.9 AS builder
 
 # Configuración del entorno
 ENV PYTHONDONTWRITEBYTECODE 1
