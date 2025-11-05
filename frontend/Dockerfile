@@ -11,13 +11,13 @@ WORKDIR /app
 RUN apk add --no-cache python3 make g++
 
 # 2. Copiar archivos de dependencia
-COPY frontend/package*.json ./
+COPY package*.json ./
 
 # 3. Instalación Limpia y Consistente (usando npm ci)
 RUN npm ci
 
 # 4. Copiar el resto del código fuente
-COPY frontend/ .
+COPY  .
 
 # 5. Ejecutar el build (ahora que el binario 'vite' existe)
 # npm run build funciona porque el binario debe estar ya en su lugar.
@@ -39,7 +39,7 @@ COPY --from=build /app/dist /usr/share/nginx/html
 
 # 4. Configuración custom de Nginx para Vue.js (manejo de rutas)
 # Asegúrate de que tu nginx.conf incluya 'try_files $uri $uri/ /index.html;'
-COPY frontend/nginx.conf /etc/nginx/conf.d/default.conf
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 # 5. Exponer el puerto estándar HTTP
 # EXPOSE 80 está bien, ya que Nginx por defecto escucha en este puerto.
