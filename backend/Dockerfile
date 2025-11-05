@@ -1,55 +1,35 @@
-# ----------------------------------------------------
-# Etapa 1: Build (Usando la imagen oficial de PyTorch, ¡con tag corregido!)
-# Nota: La etiqueta más estable y reciente compatible con CPU es a menudo py310.
-# ----------------------------------------------------
-FROM pytorch/pytorch:2.3.1-cpu-py310 AS builder
+# Usa una imagen base de Python slim, pero que permite instalar dependencias del sistema
+FROM python:3.11-slim
 
-# 1. Instalar herramientas de compilación y dependencias de sistema
-ENV DEBIAN_FRONTEND=noninteractive
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
+# Establece el entorno para evitar problemas de codificación
+ENV PYTHONUNBUFFERED 1
+
+# 1. INSTALACIÓN DE DEPENDENCIAS DEL SISTEMA (CRÍTICO)
+# Estos paquetes son necesarios para compilar Numpy, Numba, PyODBC, y otras.
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        # Herramientas de compilación para C/C++ (necesarias para muchos paquetes binarios como numpy/scipy/cffi)
         build-essential \
+        # Headers y archivos de desarrollo para Python
+        python3-dev \
+        # Librerías para PyODBC
         unixodbc-dev \
-        libpq-dev \
-    && rm -rf /var/lib/apt/lists/*
-
-# Directorio de trabajo
-WORKDIR /app
-
-# Copiar el archivo de requerimientos y realizar la instalación
-COPY requirements.txt .
-# Ignorar torch, numpy y tiktoken (parte de whisper) si la base los incluye
-RUN pip install --no-cache-dir -r requirements.txt --ignore-installed torch numpy
-
-# ----------------------------------------------------
-# Etapa 2: Runtime (Imagen limpia)
-# Usamos python:3.10-slim para que coincida con el builder
-# ----------------------------------------------------
-FROM python:3.10-slim
-
-# 1. Instalar librerías de sistema en runtime
-ENV DEBIAN_FRONTEND=noninteractive
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
-        libpq5 \
-        odbcinst1debian2 \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Configuración del entorno
-ENV PYTHONDONTWRITEBYTECODE 1
-ENV PYTHONUNBUFFERED 1
-
+# 2. CONFIGURACIÓN DEL DIRECTORIO DE TRABAJO
 WORKDIR /app
 
-# 2. Copiar librerías de la Etapa Builder (¡Path ajustado a python3.10!)
-COPY --from=builder /usr/local/lib/python3.10/site-packages /usr/local/lib/python3.10/site-packages
+# 3. INSTALACIÓN DE DEPENDENCIAS DE PYTHON
+# Copia el archivo de requisitos e instala las dependencias
+COPY backend/requirements-linux.txt .
+RUN pip install --no-cache-dir -r requirements-linux.txt
 
-# Copiar el código de la aplicación
-COPY . /app/
+# 4. COPIAR EL CÓDIGO DE LA APLICACIÓN
+# Copia el resto del código desde el directorio 'backend'
+COPY backend/main.py .
 
-# Exponer puerto
-EXPOSE 5000
-
+# 5. CONFIGURACIÓN FINAL
+EXPOSE 8000
 # Comando de inicio
-CMD ["python", "main.py"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
