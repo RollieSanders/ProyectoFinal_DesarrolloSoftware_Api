@@ -2,6 +2,8 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import List, Optional
 from fastapi.middleware.cors import CORSMiddleware
+from config.database import execute_query, initialize_database # <--- ¡CAMBIO AQUÍ!
+import mysql.connector
 
 app = FastAPI()
 
@@ -33,10 +35,23 @@ products = [
     Product(id = 5, name="Tacos al Pastor", price=10.00, image_url="https://images.pexels.com/photos/461198/pexels-photo-461198.jpeg?auto=compress&cs=tinysrgb&w=300&h=200&dpr=1"),
 ]
 
+# --- Función de Inicialización al Inicio de la App ---
+@app.on_event("startup")
+async def startup_event():
+    """Ejecuta la inicialización de la base de datos al iniciar la API."""
+    initialize_database()
+
 @app.get("/products", response_model = List[Product])
 # response_model = List[Product] : Indica que la respuesta sera una lista de objetos de tipo Product
 async def get_products():
-    return products
+    """Obtiene todos los productos de la base de datos."""
+    try:
+        query = "SELECT id, name, price, image_url FROM products"
+        # La función execute_query se llama igual, solo cambió la importación.
+        db_products = execute_query(query) 
+        return db_products
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error DB al obtener productos: {e}")
 
 @app.get("/products/{product_id}", response_model= Product)
 async def get_product(product_id:int):
