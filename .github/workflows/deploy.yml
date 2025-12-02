@@ -105,7 +105,7 @@ jobs:
           echo "new_task_arn=$NEW_TASK_ARN" >> $GITHUB_OUTPUT # Guardar el ARN para el siguiente paso
 
       - name: Despliegue al Servicio ECS
-        # ❌ ERROR CORREGIDO: Usar la acción correcta 'amazon-ecs-deploy-task-definition'
+        # ERROR CORREGIDO: Usar la acción correcta 'amazon-ecs-deploy-task-definition'
         uses: aws-actions/amazon-ecs-deploy-task-definition@v1
         with:
           cluster: ${{ env.ECS_CLUSTER }}

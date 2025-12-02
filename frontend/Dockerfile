@@ -50,5 +50,6 @@ COPY nginx.conf /etc/nginx/conf.d/default.conf
 EXPOSE 80
 
 # 6. Comando de inicio (CMD)
+#
 # Esto es correcto para mantener Nginx en primer plano.
 CMD ["nginx", "-g", "daemon off;"]
