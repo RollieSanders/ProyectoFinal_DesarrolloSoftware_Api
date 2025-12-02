@@ -159,7 +159,7 @@ jobs:
           CLUSTER=${{ env.ECS_CLUSTER }}
           SERVICE=${{ env.ECS_SERVICE }}
           REGION=${{ env.AWS_REGION }}
-          ATTEMPTS=30
+          ATTEMPTS=5
           SLEEP=10
           ok=false
           for i in $(seq 1 $ATTEMPTS); do
