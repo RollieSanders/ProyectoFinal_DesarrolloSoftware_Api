@@ -102,11 +102,38 @@ jobs:
             --query 'taskDefinition' --output json --region ${{ env.AWS_REGION }}) || true
 
           if [ -z "$TASK_DEF_JSON" ] || [ "$TASK_DEF_JSON" = "null" ]; then
-            echo "ERROR: No se pudo obtener la Task Definition '${{ env.ECS_TASK_DEFINITION }}'.";
-            echo "Verifica que la Task Definition existe y que las credenciales tienen permiso 'ecs:DescribeTaskDefinition'.";
-            echo "Listado de Task Definitions con prefijo: ${{ env.ECS_TASK_DEFINITION }}";
-            aws ecs list-task-definitions --family-prefix ${{ env.ECS_TASK_DEFINITION }} --region ${{ env.AWS_REGION }} || true;
-            exit 1;
+            echo "INFO: No existe la Task Definition '${{ env.ECS_TASK_DEFINITION }}'. Intentando crearla desde la plantilla..."
+            # Asegurarse de que exista envsubst para sustituir variables en la plantilla
+            sudo apt-get update && sudo apt-get install -y gettext-base
+
+            # Exportar variables para envsubst (usadas por la plantilla)
+            export family="${{ env.ECS_TASK_DEFINITION }}"
+            export frontend_image_uri="${{ env.FRONTEND_IMAGE_URI }}"
+            export backend_image_uri="${{ env.IMAGE_URI }}"
+            export ecs_execution_role_arn="${{ secrets.ECS_EXECUTION_ROLE_ARN }}"
+            export ecs_task_role_arn="${{ secrets.ECS_TASK_ROLE_ARN }}"
+            export aws_region="${{ env.AWS_REGION }}"
+            export db_endpoint="${{ secrets.DB_ENDPOINT }}"
+
+            if [ -z "$ecs_execution_role_arn" ] || [ -z "$ecs_task_role_arn" ]; then
+              echo "ERROR: faltan secrets 'ECS_EXECUTION_ROLE_ARN' o 'ECS_TASK_ROLE_ARN'. Añade estos secretos y reintenta.";
+              exit 1;
+            fi
+
+            # Construir JSON substituyendo variables en la plantilla
+            envsubst < terraform/ecs_task_definition.json.tpl > /tmp/td.json
+
+            echo "Task Definition JSON generado:";
+            cat /tmp/td.json | jq . || true
+
+            # Registrar la nueva Task Definition
+            aws ecs register-task-definition --cli-input-json file:///tmp/td.json --region ${{ env.AWS_REGION }} || { echo "ERROR: registro fallido"; exit 1; }
+
+            # Recuperar el ARN recién registrado
+            NEW_TASK_ARN=$(aws ecs list-task-definitions --family-prefix "${{ env.ECS_TASK_DEFINITION }}" --region ${{ env.AWS_REGION }} --query 'taskDefinitionArns[-1]' --output text)
+            echo "new_task_arn=$NEW_TASK_ARN" >> $GITHUB_OUTPUT
+            echo "Registrada Task Definition: $NEW_TASK_ARN"
+            exit 0
           fi
 
           # 2. Limpiar metadatos innecesarios para el registro
