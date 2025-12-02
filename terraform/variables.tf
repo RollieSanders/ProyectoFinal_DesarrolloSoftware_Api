@@ -54,3 +54,11 @@ variable "fargate_memory" {
   type        = string
   default     = "1024"
 }
+
+# Endpoint de la base de datos (RDS). Proveer este valor antes de aplicar o
+# pasar como secret desde el pipeline CI/CD.
+variable "db_endpoint" {
+  description = "Endpoint DNS de la base de datos (ej: mydb.xxxx.us-east-1.rds.amazonaws.com)"
+  type        = string
+  default     = ""
+}

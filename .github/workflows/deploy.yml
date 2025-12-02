@@ -115,6 +115,20 @@ jobs:
             export aws_region="${{ env.AWS_REGION }}"
             export db_endpoint="${{ secrets.DB_ENDPOINT }}"
 
+            # Si no hay DB_ENDPOINT en secrets, intentar obtenerlo desde Terraform (si existe)
+            if [ -z "$db_endpoint" ] || [ "$db_endpoint" = "placeholder-db-endpoint.com" ]; then
+              echo "DB_ENDPOINT no proporcionado en secrets o es placeholder. Intentando obtener desde Terraform state..."
+              if command -v terraform >/dev/null 2>&1; then
+                db_endpoint=$(terraform -chdir=terraform output -raw db_endpoint 2>/dev/null || true)
+                echo "DB_ENDPOINT desde terraform: $db_endpoint"
+              fi
+            fi
+
+            if [ -z "$db_endpoint" ] || [ "$db_endpoint" = "placeholder-db-endpoint.com" ]; then
+              echo "ERROR: DB_ENDPOINT no configurado. Añade el secret 'DB_ENDPOINT' o configura Terraform output 'db_endpoint'.";
+              exit 1;
+            fi
+
             if [ -z "$ecs_execution_role_arn" ] || [ -z "$ecs_task_role_arn" ]; then
               echo "ERROR: faltan secrets 'ECS_EXECUTION_ROLE_ARN' o 'ECS_TASK_ROLE_ARN'. Añade estos secretos y reintenta.";
               exit 1;
@@ -142,7 +156,8 @@ jobs:
           # 3. Actualizar URI de las imágenes en la definición de tarea
           UPDATED_TASK_DEF=$(echo $CLEAN_TASK_DEF | \
             jq --arg FRONTEND_URI "${{ env.FRONTEND_IMAGE_URI }}" '.containerDefinitions |= map(if .name == "frontend-container" then .image = $FRONTEND_URI else . end)' | \
-            jq --arg BACKEND_URI "${{ env.IMAGE_URI }}" '.containerDefinitions |= map(if .name == "backend-container" then .image = $BACKEND_URI else . end)')
+            jq --arg BACKEND_URI "${{ env.IMAGE_URI }}" '.containerDefinitions |= map(if .name == "backend-container" then .image = $BACKEND_URI else . end)' | \
+            jq --arg DB_ENDPOINT "$db_endpoint" '.containerDefinitions |= map(if .name == "backend-container" then (.environment |= ( (map(select(.name != "DB_HOST")) // []) + [{"name":"DB_HOST","value":$DB_ENDPOINT}])) else . end)')
 
           # 4. Registrar la nueva Task Definition
           NEW_TASK_ARN=$(aws ecs register-task-definition \

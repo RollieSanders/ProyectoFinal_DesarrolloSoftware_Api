@@ -30,8 +30,10 @@ RUN pip install --no-cache-dir -r requirements-linux.txt
 # Copia el resto del código desde el directorio 'backend'
 COPY config config/
 COPY main.py .
+COPY wait-for-db.sh /wait-for-db.sh
+RUN chmod +x /wait-for-db.sh
 
 # 5. CONFIGURACIÓN FINAL
 EXPOSE 8000
-# Comando de inicio
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Comando de inicio: primero esperar a la BD, luego ejecutar la app
+CMD ["sh", "-c", "/wait-for-db.sh && exec uvicorn main:app --host 0.0.0.0 --port 8000"]

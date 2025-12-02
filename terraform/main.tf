@@ -160,8 +160,10 @@ data "template_file" "ecs_task_definition" {
     frontend_image_uri     = "nginx:latest" 
     backend_image_uri      = "python:latest"
     
-    # TODO: Aquí debes configurar el endpoint de tu base de datos si usas RDS
-    db_endpoint            = "placeholder-db-endpoint.com" 
+    # El endpoint de la base de datos se debe proporcionar mediante la variable
+    # `db_endpoint`. En despliegues automatizados, pásalo desde Terraform vars
+    # o desde el pipeline CI/CD (GitHub Actions).
+    db_endpoint            = var.db_endpoint
   }
 }
 

@@ -1,0 +1,14 @@
+# Ejemplo de terraform.tfvars
+# Copia este archivo a terraform.tfvars y ajusta los valores reales antes de ejecutar terraform
+
+aws_region = "us-east-1"
+project_name = "proyectofinal"
+frontend_repo_name = "proyectofinal-frontend"
+backend_repo_name = "proyectofinal-backend"
+vpc_cidr_block = "10.0.0.0/16"
+public_subnet_cidrs = ["10.0.1.0/24", "10.0.2.0/24"]
+fargate_cpu = "512"
+fargate_memory = "1024"
+
+# Ajusta este valor al endpoint real de tu base de datos RDS
+# db_endpoint = "mi-db.xxxx.us-east-1.rds.amazonaws.com"
