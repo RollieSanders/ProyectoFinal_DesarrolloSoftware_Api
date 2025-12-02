@@ -9,7 +9,7 @@ USER root
 WORKDIR /app
 
 # 1. Instalar herramientas de build del SO (para dependencias nativas)
-RUN apk add --no-cache python3 make g++
+# RUN apk add --no-cache python3 make g++
 
 # 2. Copiar archivos de dependencia
 COPY package*.json ./

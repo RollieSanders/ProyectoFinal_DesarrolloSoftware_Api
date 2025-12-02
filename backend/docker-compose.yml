@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  # 1. Servicio de la Base de Datos MySQL
+  db:
+    image: mysql:8.0
+    container_name: mysql_db
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+      MYSQL_DATABASE: ${DB_DATABASE}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "3306:3306" 
+    volumes:
+      - db_data:/var/lib/mysql
+    
+  # 2. Servicio de tu Aplicación FastAPI
+  api:
+    build: .
+    container_name: mi-api-backend
+    # CORRECCIÓN: Se elimina 'command' para usar el CMD del Dockerfile.
+    # Si quieres usar hot-reload, podrías dejar 'command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload'
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+    environment:
+      DB_HOST: db
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_DATABASE: ${DB_DATABASE}
+# 3. Volumen para persistir los datos de la DB
+volumes:
+  db_data:

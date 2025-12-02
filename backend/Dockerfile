@@ -18,6 +18,7 @@ RUN apt-get update && \
     && rm -rf /var/lib/apt/lists/*
 
 # 2. CONFIGURACIÓN DEL DIRECTORIO DE TRABAJO
+
 WORKDIR /app
 
 # 3. INSTALACIÓN DE DEPENDENCIAS DE PYTHON
@@ -27,6 +28,7 @@ RUN pip install --no-cache-dir -r requirements-linux.txt
 
 # 4. COPIAR EL CÓDIGO DE LA APLICACIÓN
 # Copia el resto del código desde el directorio 'backend'
+COPY config config/
 COPY main.py .
 
 # 5. CONFIGURACIÓN FINAL
