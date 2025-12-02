@@ -146,7 +146,10 @@ data "template_file" "ecs_task_definition" {
 
 resource "aws_ecs_task_definition" "main" {
   family                   = "${var.project_name}-task-definition"
-  container_definitions    = data.template_file.ecs_task_definition.rendered
+  # The template file contains the full task-definition JSON; extract the
+  # "containerDefinitions" array and re-encode it so Terraform receives the
+  # expected JSON array for container_definitions.
+  container_definitions    = jsonencode(jsondecode(data.template_file.ecs_task_definition.rendered).containerDefinitions)
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
   cpu                      = var.fargate_cpu
@@ -166,6 +169,42 @@ resource "aws_lb" "main" {
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
   subnets            = aws_subnet.public[*].id
+}
+
+# Target Group para el Frontend (Fargate usa target_type = "ip")
+resource "aws_lb_target_group" "frontend" {
+  name        = "${var.project_name}-tg-frontend"
+  port        = 80
+  protocol    = "HTTP"
+  vpc_id      = aws_vpc.main.id
+  target_type = "ip"
+
+  health_check {
+    path                = "/"
+    matcher             = "200-399"
+    interval            = 30
+    timeout             = 5
+    healthy_threshold   = 2
+    unhealthy_threshold = 2
+  }
+}
+
+# Listener HTTP que apunta al target group frontend
+resource "aws_lb_listener" "http" {
+  load_balancer_arn = aws_lb.main.arn
+  port              = 80
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.frontend.arn
+  }
+}
+
+# Grupo de logs para los contenedores ECS
+resource "aws_cloudwatch_log_group" "ecs" {
+  name              = "/ecs/${var.project_name}"
+  retention_in_days = 14
 }
 
 # --- Grupo de Seguridad para el ALB (permite tráfico web)
@@ -222,8 +261,8 @@ resource "aws_security_group" "fargate" {
     from_port   = 5000
     to_port     = 5000
     protocol    = "tcp"
-    # Puede ser desde el mismo SG si están en la misma red
-    security_groups = [aws_security_group.fargate.id] 
+    # Permitir tráfico desde el ALB (o ajustar según arquitectura interna)
+    security_groups = [aws_security_group.alb.id]
   }
   egress {
     from_port   = 0
