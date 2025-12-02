@@ -17,7 +17,7 @@ COPY package*.json ./
 # 3. Instalación Limpia y Consistente
 # CAMBIO CLAVE: Usar --unsafe-perm para ignorar problemas de uid/gid/permisos
 # y -q para un output más limpio.
-RUN install -g vite
+RUN npm install -g vite
 RUN npm install
 
 # 4. Copiar el resto del código fuente
