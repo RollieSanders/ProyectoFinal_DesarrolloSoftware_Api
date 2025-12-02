@@ -152,9 +152,8 @@ jobs:
           echo "new_task_arn=$NEW_TASK_ARN" >> $GITHUB_OUTPUT # Guardar el ARN para el siguiente paso
 
       - name: Despliegue al Servicio ECS
-        # ERROR CORREGIDO: Usar la acción correcta 'amazon-ecs-deploy-task-definition'
-        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
-        with:
-          cluster: ${{ env.ECS_CLUSTER }}
-          service: ${{ env.ECS_SERVICE }}
-          task-definition: ${{ steps.update-task-def.outputs.new_task_arn }}
+        run: |
+          echo "Desplegando servicio ECS con la nueva Task Definition: ${{ steps.update-task-def.outputs.new_task_arn }}"
+          aws ecs update-service --cluster ${{ env.ECS_CLUSTER }} --service ${{ env.ECS_SERVICE }} --task-definition "${{ steps.update-task-def.outputs.new_task_arn }}" --region ${{ env.AWS_REGION }} || { echo "ERROR: fallo al actualizar el servicio ECS"; exit 1; }
+          echo "Esperando a que el servicio esté estable..."
+          aws ecs wait services-stable --cluster ${{ env.ECS_CLUSTER }} --services ${{ env.ECS_SERVICE }} --region ${{ env.AWS_REGION }}
