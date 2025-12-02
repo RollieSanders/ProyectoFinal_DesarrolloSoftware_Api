@@ -42,6 +42,18 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       # -------------------------------------------------------------------------
+      # Paso diagnóstico: comprobar credenciales y recursos ECS disponibles
+      # -------------------------------------------------------------------------
+      - name: Diagnostics AWS (credenciales y recursos ECS)
+        run: |
+          echo "Comprobando identidad de AWS..."
+          aws sts get-caller-identity || { echo "Fallo al obtener identidad (revisa secrets)."; exit 2; }
+          echo "Listado de Task Definitions (prefijo familia: ${{ env.ECS_TASK_DEFINITION }})"
+          aws ecs list-task-definitions --family-prefix ${{ env.ECS_TASK_DEFINITION }} --region ${{ env.AWS_REGION }} || true
+          echo "Listado de clusters ECS"
+          aws ecs list-clusters --region ${{ env.AWS_REGION }} || true
+
+      # -------------------------------------------------------------------------
       #  Paso 1: BUILD y PUSH del Backend (Python)
       # -------------------------------------------------------------------------
       - name: Login en Amazon ECR (Backend)
@@ -87,11 +99,19 @@ jobs:
           # 1. Obtener la definición de tarea actual (la última activa)
           TASK_DEF_JSON=$(aws ecs describe-task-definition \
             --task-definition ${{ env.ECS_TASK_DEFINITION }} \
-            --query 'taskDefinition' --output json)
-            
+            --query 'taskDefinition' --output json --region ${{ env.AWS_REGION }}) || true
+
+          if [ -z "$TASK_DEF_JSON" ] || [ "$TASK_DEF_JSON" = "null" ]; then
+            echo "ERROR: No se pudo obtener la Task Definition '${{ env.ECS_TASK_DEFINITION }}'.";
+            echo "Verifica que la Task Definition existe y que las credenciales tienen permiso 'ecs:DescribeTaskDefinition'.";
+            echo "Listado de Task Definitions con prefijo: ${{ env.ECS_TASK_DEFINITION }}";
+            aws ecs list-task-definitions --family-prefix ${{ env.ECS_TASK_DEFINITION }} --region ${{ env.AWS_REGION }} || true;
+            exit 1;
+          fi
+
           # 2. Limpiar metadatos innecesarios para el registro
           CLEAN_TASK_DEF=$(echo $TASK_DEF_JSON | jq 'del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .deregisteredAt, .registeredBy)')
-          
+
           # 3. Actualizar URI de las imágenes en la definición de tarea
           UPDATED_TASK_DEF=$(echo $CLEAN_TASK_DEF | \
             jq --arg FRONTEND_URI "${{ env.FRONTEND_IMAGE_URI }}" '.containerDefinitions |= map(if .name == "frontend-container" then .image = $FRONTEND_URI else . end)' | \
@@ -100,8 +120,8 @@ jobs:
           # 4. Registrar la nueva Task Definition
           NEW_TASK_ARN=$(aws ecs register-task-definition \
             --cli-input-json "$UPDATED_TASK_DEF" \
-            --query 'taskDefinition.taskDefinitionArn' --output text)
-            
+            --query 'taskDefinition.taskDefinitionArn' --output text --region ${{ env.AWS_REGION }})
+
           echo "new_task_arn=$NEW_TASK_ARN" >> $GITHUB_OUTPUT # Guardar el ARN para el siguiente paso
 
       - name: Despliegue al Servicio ECS
