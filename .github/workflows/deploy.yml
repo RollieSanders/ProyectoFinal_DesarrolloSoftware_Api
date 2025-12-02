@@ -155,5 +155,55 @@ jobs:
         run: |
           echo "Desplegando servicio ECS con la nueva Task Definition: ${{ steps.update-task-def.outputs.new_task_arn }}"
           aws ecs update-service --cluster ${{ env.ECS_CLUSTER }} --service ${{ env.ECS_SERVICE }} --task-definition "${{ steps.update-task-def.outputs.new_task_arn }}" --region ${{ env.AWS_REGION }} || { echo "ERROR: fallo al actualizar el servicio ECS"; exit 1; }
-          echo "Esperando a que el servicio esté estable..."
-          aws ecs wait services-stable --cluster ${{ env.ECS_CLUSTER }} --services ${{ env.ECS_SERVICE }} --region ${{ env.AWS_REGION }}
+          echo "Esperando a que el servicio esté estable (polling)..."
+          CLUSTER=${{ env.ECS_CLUSTER }}
+          SERVICE=${{ env.ECS_SERVICE }}
+          REGION=${{ env.AWS_REGION }}
+          ATTEMPTS=30
+          SLEEP=10
+          ok=false
+          for i in $(seq 1 $ATTEMPTS); do
+            echo "Attempt $i/$ATTEMPTS: checking service status..."
+            DESCRIBE=$(aws ecs describe-services --cluster "$CLUSTER" --services "$SERVICE" --region "$REGION")
+            echo "$DESCRIBE" | jq .
+            running=$(echo "$DESCRIBE" | jq -r '.services[0].runningCount')
+            desired=$(echo "$DESCRIBE" | jq -r '.services[0].desiredCount')
+            deployments=$(echo "$DESCRIBE" | jq -r '.services[0].deployments | length')
+            echo "running=$running desired=$desired deployments=$deployments"
+            if [ "$running" != "null" ] && [ "$running" -ge "$desired" ] && [ "$deployments" -eq 1 ]; then
+              echo "Service is stable (running >= desired and single deployment)."
+              ok=true
+              break
+            fi
+            sleep $SLEEP
+          done
+
+          if [ "$ok" != "true" ]; then
+            echo "ERROR: service did not become stable after $((ATTEMPTS*SLEEP)) seconds. Gathering diagnostics..."
+            echo "--- ECS Service Description ---"
+            aws ecs describe-services --cluster "$CLUSTER" --services "$SERVICE" --region "$REGION" || true
+            echo "--- ECS Tasks (list) ---"
+            aws ecs list-tasks --cluster "$CLUSTER" --service-name "$SERVICE" --region "$REGION" || true
+            TASKS=$(aws ecs list-tasks --cluster "$CLUSTER" --service-name "$SERVICE" --region "$REGION" --output text --query 'taskArns') || true
+            if [ -n "$TASKS" ]; then
+              echo "--- ECS Tasks (describe) ---"
+              aws ecs describe-tasks --cluster "$CLUSTER" --tasks $TASKS --region "$REGION" || true
+            fi
+            echo "--- Target Group Health (if applicable) ---"
+            # try to find target group ARN from the service's loadBalancers (container -> targetGroupArn)
+            TG_ARN=$(echo "$DESCRIBE" | jq -r '.services[0].loadBalancers[0].targetGroupArn // empty') || true
+            if [ -n "$TG_ARN" ]; then
+              echo "TargetGroup ARN: $TG_ARN"
+              aws elbv2 describe-target-health --target-group-arn "$TG_ARN" --region "$REGION" || true
+            else
+              echo "No target group ARN found in service description."
+            fi
+            echo "--- CloudWatch Logs (last 200 events per log stream if available) ---"
+            LOG_GROUP='/ecs/proyectofinal'
+            streams=$(aws logs describe-log-streams --log-group-name "$LOG_GROUP" --order-by LastEventTime --descending --limit 5 --region "$REGION" --query 'logStreams[].logStreamName' --output text) || true
+            for s in $streams; do
+              echo "---- Logs from $s ----"
+              aws logs get-log-events --log-group-name "$LOG_GROUP" --log-stream-name "$s" --limit 200 --region "$REGION" || true
+            done
+            exit 1
+          fi
